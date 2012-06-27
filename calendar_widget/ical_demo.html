@@ -1,0 +1,106 @@
+<html>
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  <title>RRP iCal test</title>
+
+  <link rel="stylesheet" type="text/css" href="stylesheets/smoothness/jquery-ui-1.8.13.custom.css" />
+  <link rel="stylesheet" type="text/css" href="javascripts/fullcalendar/fullcalendar.css">
+
+  <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.1/jquery.min.js"></script>
+  <script src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.13/jquery-ui.min.js"></script>
+
+  <script src="javascripts/jquery.base64.js"></script>
+  <script src="javascripts/jquery.xdomainajax.js"></script>
+  <script src="javascripts/jquery.icalendar.js"></script>
+  <script src="javascripts/fullcalendar/fullcalendar.js"></script>
+  <script src="javascripts/fullcalendar/gcal.js"></script>
+
+  <script type="text/javascript">
+    function get_events_from_ical_text(ical_formatted_text) {
+      var calendar_data;
+      var events = [];
+
+      try {
+        calendar_data = $.icalendar.parse(ical_formatted_text);
+      }
+      catch (e) {
+        //  Return an empty array if the iCal data could not be parsed
+        return [];
+      }
+      
+      //  TODO: Need to handle the case where calendar_data.vevent is an object (because there 
+      //        is only one event listed in the iCal feed), and not an array of objects
+      if (calendar_data.vevent != undefined) {
+        for (var i = 0; i < calendar_data.vevent.length; i++) {
+          events.push({
+            title: calendar_data.vevent[i]['summary'],
+            //  We (currently) use the toISOString() function to prevent the fullCalendar library
+            //   from interpreting the JavaScript Date objects (calendar_data.vevent[i]['dtstart'],
+            //   calendar_data.vevent[i]['dtend']) for all day events that start at midnight (with no
+            //   time zone specified) as actually starting at 7pm EST on the day before.
+            start: calendar_data.vevent[i]['dtstart'].toISOString(),
+            end:   calendar_data.vevent[i]['dtend'].toISOString(),
+            url:   calendar_data.vevent[i]['url']
+          });
+        }
+      }
+
+      return events;
+    }
+
+    function add_event_source(source_url) {
+       $('#calendar_widget').fullCalendar('addEventSource', function(start, end, callback) {
+         $.ajax({
+           url: source_url,
+           type: 'GET',
+           dataType: 'text',
+           success: function(ical_data) {
+             var events;
+             
+             switch (typeof ical_data) {
+               case 'string':
+                 //  lemma: The iCal data is on the same server as this script
+                 events = get_events_from_ical_text(ical_data);
+                 break;
+               case 'object':
+                 //  lemma: The iCal data is on a different domain, and was retrieved
+                 //          as an HTML document using the jQuery xdomainajax plugin
+                 events = get_events_from_ical_text($(ical_data.responseText).text());
+                 break;
+             }
+
+             //  Pass the array of events to the fullCalendar library's callback function
+             callback(events);
+           }
+         });
+       });
+    }
+    
+    function add_event_sources_from_sitelist(sitelist_url) {
+      $.get(sitelist_url, function(response, status, xhr) {
+        var site_urls = response.split('\n');
+        for (url_index in site_urls) {
+          if (site_urls[url_index].search(/calendar\.google\.com/) != -1) {
+            $('#calendar_widget').fullCalendar('addEventSource', $.fullCalendar.gcalFeed(site_urls[url_index]));
+          }
+          else if (site_urls[url_index].search(/http/) != -1) {
+            add_event_source(site_urls[url_index]);
+          }
+        }
+      });
+    }
+
+    $(function() {
+      $('#calendar_widget').fullCalendar({});
+      add_event_sources_from_sitelist('sitelist.txt');
+    });
+  </script>
+</head>
+<body>
+
+  <div id="calendar_widget">
+  </div>
+
+</body>
+</html>
