@@ -25,6 +25,7 @@
         calendar_data = $.icalendar.parse(ical_formatted_text);
       }
       catch (e) {
+        console.log('Caught icalendar.parse exception: ' + e);
         //  Return an empty array if the iCal data could not be parsed
         return [];
       }
